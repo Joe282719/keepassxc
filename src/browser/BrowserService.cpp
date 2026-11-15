@@ -1083,6 +1083,21 @@ QList<Entry*> BrowserService::searchEntries(const QSharedPointer<Database>& db,
         }
     }
 
+    // Best-match-only prefers a real URL match over entries that have no URL.
+    // Drop the URL-less entries here so the access dialog and the returned list agree.
+    // When nothing matched by URL, those entries are the only candidates and are kept.
+    if (!passkey && browserSettings()->bestMatchOnly() && browserSettings()->offerEntriesWithoutUrl()) {
+        QList<Entry*> urlMatches;
+        for (auto* entry : entries) {
+            if (!entry->getAllUrls().isEmpty()) {
+                urlMatches.append(entry);
+            }
+        }
+        if (!urlMatches.isEmpty()) {
+            return urlMatches;
+        }
+    }
+
     return entries;
 }
 
@@ -1298,6 +1313,12 @@ Group* BrowserService::getDefaultEntryGroup(const QSharedPointer<Database>& sele
 // extension provided site and form url.
 int BrowserService::sortPriority(const QStringList& urls, const QString& siteUrl, const QString& formUrl)
 {
+    // No URL to compare. Rank below every real match. Entries that share this
+    // priority are still returned when they are the only candidates.
+    if (urls.isEmpty()) {
+        return 0;
+    }
+
     QList<int> priorityList;
     // NOTE: QUrl::matches is utterly broken in Qt < 5.11, so we work around that
     // by removing parts of the url that we don't match and direct matching others
@@ -1384,8 +1405,8 @@ bool BrowserService::removeFirstDomain(QString& hostname)
     return false;
 }
 
-/* Test if a search URL matches a custom entry. If the URL has the schema "keepassxc", some special checks will be made.
- * Otherwise, this simply delegates to handleURL(). */
+/* Test if a search URL matches an entry. If the URL has the schema "keepassxc", some special checks will be made.
+ * Otherwise this delegates to handleURL(), and may also accept an entry that has no URL at all. */
 bool BrowserService::shouldIncludeEntry(Entry* entry,
                                         const QString& url,
                                         const QString& submitUrl,
@@ -1399,7 +1420,8 @@ bool BrowserService::shouldIncludeEntry(Entry* entry,
     }
 
     // Handle the entry URL
-    if (handleURL(entry->resolveUrl(), url, submitUrl, omitWwwSubdomain)) {
+    const auto entryUrl = entry->resolveUrl();
+    if (handleURL(entryUrl, url, submitUrl, omitWwwSubdomain)) {
         return true;
     }
 
@@ -1411,7 +1433,9 @@ bool BrowserService::shouldIncludeEntry(Entry* entry,
         }
     }
 
-    return false;
+    // An empty URL field, with no additional URLs, matches every site when the setting is on.
+    // Entries that have a URL already returned above and keep their normal matching.
+    return browserSettings()->offerEntriesWithoutUrl() && entryUrl.isEmpty() && additionalUrls.isEmpty();
 }
 
 // Returns all Passkey entries for the current Relying Party

@@ -65,6 +65,16 @@ void BrowserSettings::setBestMatchOnly(bool bestMatchOnly)
     config()->set(Config::Browser_BestMatchOnly, bestMatchOnly);
 }
 
+bool BrowserSettings::offerEntriesWithoutUrl()
+{
+    return config()->get(Config::Browser_OfferEntriesWithoutUrl).toBool();
+}
+
+void BrowserSettings::setOfferEntriesWithoutUrl(bool offerEntriesWithoutUrl)
+{
+    config()->set(Config::Browser_OfferEntriesWithoutUrl, offerEntriesWithoutUrl);
+}
+
 bool BrowserSettings::unlockDatabase()
 {
     return config()->get(Config::Browser_UnlockDatabase).toBool();

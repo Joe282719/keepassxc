@@ -35,6 +35,8 @@ public:
     void setShowNotification(bool showNotification);
     bool bestMatchOnly();
     void setBestMatchOnly(bool bestMatchOnly);
+    bool offerEntriesWithoutUrl();
+    void setOfferEntriesWithoutUrl(bool offerEntriesWithoutUrl);
     bool unlockDatabase();
     void setUnlockDatabase(bool unlockDatabase);
     bool matchUrlScheme();

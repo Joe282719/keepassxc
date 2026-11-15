@@ -1286,6 +1286,15 @@ Remplacer la clé dans %1 – %2 ?</translation>
         <translation>Ne retourner que les identifiants qui correspondent le mieux</translation>
     </message>
     <message>
+        <source>Entries with an empty URL are included for every website. With best-matching enabled, they are offered only when nothing else matches the site.</source>
+        <translation>Les entrées sans URL sont proposées pour chaque site. Si seule la meilleure correspondance est activée, elles ne sont proposées que lorsqu’aucune autre entrée ne correspond au site.</translation>
+    </message>
+    <message>
+        <source>Offer entries without a URL on all websites</source>
+        <extracomment>Entries whose URL field is empty are offered to the browser extension on every website</extracomment>
+        <translation>Proposer les entrées sans URL sur tous les sites web</translation>
+    </message>
+    <message>
         <source>Returns expired credentials. String [expired] is added to the title.</source>
         <translation>Retourne les identifiants expirés. La chaîne [expiré] est ajoutée au titre.</translation>
     </message>
