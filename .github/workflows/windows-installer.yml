@@ -1,0 +1,137 @@
+name: Windows installer
+
+# MSVC + vcpkg build, matching the Windows steps in the project wiki:
+# cmake -G Ninja with CMAKE_TOOLCHAIN_FILE pointing at vcpkg, Qt via
+# CMAKE_PREFIX_PATH, then cpack generators ZIP and WIX (MSI).
+# Qt itself is the prebuilt MSVC package. Building Qt inside vcpkg is optional
+# in the docs and takes hours, so this job does not set WITH_BUILD_QT.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - develop
+      - cursor/browser-urlless-entries-fedf
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_ROOT: C:\vcpkg
+  # Keep in sync with builtin-baseline in vcpkg.json.
+  VCPKG_BASELINE: 1600ce2ba1b6b621bfc5a31a785c4963b817a1c7
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  VCPKG_DISABLE_METRICS: "1"
+
+jobs:
+  installer:
+    name: Build MSI and portable ZIP
+    runs-on: windows-latest
+    timeout-minutes: 240
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          vsversion: "2022"
+
+      - name: Enable long paths
+        shell: pwsh
+        run: git config --global core.longpaths true
+
+      - name: Install vcpkg
+        shell: pwsh
+        run: |
+          git clone --filter=blob:none https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
+          git -C $env:VCPKG_ROOT fetch --depth 1 origin $env:VCPKG_BASELINE
+          git -C $env:VCPKG_ROOT checkout --detach $env:VCPKG_BASELINE
+          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          "$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.3"
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtsvg qttools
+          cache: true
+          setup-python: "true"
+
+      - name: Install WiX Toolset 3.14
+        shell: pwsh
+        run: |
+          $zip = Join-Path $env:RUNNER_TEMP "wix314-binaries.zip"
+          $dest = "C:\WiX314"
+          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest -Force
+          $candle = Get-ChildItem -Path $dest -Recurse -Filter candle.exe | Select-Object -First 1
+          if (-not $candle) { throw "candle.exe was not found in the WiX archive" }
+          $candle.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "WiX tools: $($candle.DirectoryName)"
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          if (-not $env:QT_ROOT_DIR) { throw "QT_ROOT_DIR was not set by the Qt install step" }
+          Write-Host "cl: $((Get-Command cl).Source)"
+          Write-Host "QT_ROOT_DIR=$env:QT_ROOT_DIR"
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DKEEPASSXC_BUILD_TYPE=Snapshot `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
+            -DX_VCPKG_APPLOCAL_DEPS_INSTALL=ON `
+            -DWITH_TESTS=OFF `
+            -DWITH_GUI_TESTS=OFF `
+            -DKPXC_FEATURE_DOCS=OFF `
+            -DKPXC_FEATURE_BROWSER=ON
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build build --parallel
+
+      - name: Package MSI and portable ZIP
+        shell: pwsh
+        run: cmake --build build --target package
+
+      - name: Show package files
+        shell: pwsh
+        run: Get-ChildItem build -File | Where-Object { $_.Extension -in '.msi', '.zip' } | Format-Table Name, Length
+
+      - name: Upload Windows installer (MSI)
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeePassXC-Windows-MSI
+          path: build/*.msi
+          if-no-files-found: error
+
+      - name: Upload portable ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: KeePassXC-Windows-Portable-ZIP
+          path: build/*.zip
+          if-no-files-found: error
+
+      - name: Upload configure logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-build-logs
+          if-no-files-found: ignore
+          path: |
+            build/CMakeCache.txt
+            build/CMakeFiles/CMakeConfigureLog.yaml
+            build/CMakeFiles/CMakeOutput.log
+            build/CMakeFiles/CMakeError.log
