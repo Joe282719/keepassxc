@@ -56,6 +56,7 @@ private slots:
     void testBestMatchingWithAdditionalURLs();
     void testRestrictBrowserKey();
     void testHideEntry();
+    void testSearchEntriesWithoutUrl();
     void testBrowserHostMessaging();
     void testBrowserHostFragmentedMessaging();
     void testBrowserHostCoalescedMessaging();

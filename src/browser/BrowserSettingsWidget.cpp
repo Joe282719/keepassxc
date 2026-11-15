@@ -101,6 +101,7 @@ void BrowserSettingsWidget::loadSettings()
 
     m_ui->showNotification->setChecked(settings->showNotification());
     m_ui->bestMatchOnly->setChecked(settings->bestMatchOnly());
+    m_ui->offerEntriesWithoutUrl->setChecked(settings->offerEntriesWithoutUrl());
     m_ui->unlockDatabase->setChecked(settings->unlockDatabase());
     m_ui->matchUrlScheme->setChecked(settings->matchUrlScheme());
 
@@ -225,6 +226,7 @@ void BrowserSettingsWidget::saveSettings()
     settings->setEnabled(m_ui->enableBrowserSupport->isChecked());
     settings->setShowNotification(m_ui->showNotification->isChecked());
     settings->setBestMatchOnly(m_ui->bestMatchOnly->isChecked());
+    settings->setOfferEntriesWithoutUrl(m_ui->offerEntriesWithoutUrl->isChecked());
     settings->setUnlockDatabase(m_ui->unlockDatabase->isChecked());
     settings->setMatchUrlScheme(m_ui->matchUrlScheme->isChecked());
 

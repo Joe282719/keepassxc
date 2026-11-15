@@ -87,6 +87,8 @@ image::browser_confirm_access_dialog.png[,80%]
 
 5. Ensure the credentials you want to use are checked, then click *(A)* Remember _(optional)_, then click _Allow Selected_ *(B)*.
 
+Entries with an empty URL field are included in this list for every website when _Offer entries without a URL on all websites_ is enabled under _Tools -> Settings -> Browser Integration_. The option is enabled by default. Check the account you want to use; these entries start unchecked so the whole list is not granted at once. Entries that already have a URL keep their usual matching and stay selected. With _Return only best-matching credentials_ enabled, entries without a URL are offered only when no entry matches the current site. Entries and groups hidden from the browser integration, and anything in the recycle bin, stay excluded.
+
 6. In your website, the KeePassXC icon will appear in the username field of the login form *(A)*. Click the icon to populate the field with your stored credentials. If you have more than one credential for this website, a dropdown will appear to choose the one to use.
 +
 .Fill Credentials

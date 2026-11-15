@@ -47,6 +47,7 @@ void TestBrowser::initTestCase()
     QVERIFY(Crypto::init());
     m_browserService = browserService();
     browserSettings()->setBestMatchOnly(false);
+    browserSettings()->setOfferEntriesWithoutUrl(true);
     QLocale::setDefault(QLocale::c());
 }
 
@@ -315,6 +316,7 @@ void TestBrowser::testSortPriority_data()
     QTest::newRow("Subdomain Mismatch (site)") << siteUrl << "https://sub.github.com/" << "https://github.net/" << 60;
     QTest::newRow("Subdomain Mismatch (form)") << siteUrl << "https://github.net/" << "https://sub.github.com/" << 50;
 
+    QTest::newRow("No URL") << "" << siteUrl << formUrl << 0;
     QTest::newRow("Scheme Mismatch") << "http://github.com" << siteUrl << formUrl << 0;
     QTest::newRow("Scheme Mismatch w/path") << "http://github.com/login" << siteUrl << formUrl << 0;
     QTest::newRow("Invalid URL") << "http://github" << siteUrl << formUrl << 0;
@@ -1199,6 +1201,135 @@ void TestBrowser::testHideEntry()
     root->setCustomDataTriState(BrowserService::OPTION_HIDE_ENTRY, Group::Disable);
     result = m_browserService->searchEntries(db, "https://github.com", "https://github.com/session");
     QCOMPARE(result.length(), 1);
+}
+
+void TestBrowser::testSearchEntriesWithoutUrl()
+{
+    const auto previousOffer = browserSettings()->offerEntriesWithoutUrl();
+    const auto previousBestMatch = browserSettings()->bestMatchOnly();
+    browserSettings()->setOfferEntriesWithoutUrl(true);
+    browserSettings()->setBestMatchOnly(false);
+
+    auto db = QSharedPointer<Database>::create();
+    auto* root = db->rootGroup();
+
+    QStringList urls = {"https://github.com/login"};
+    auto* withUrl = createEntries(urls, root).first();
+    withUrl->setTitle("GitHub");
+
+    auto* withoutUrl = new Entry();
+    withoutUrl->setGroup(root);
+    withoutUrl->setUuid(QUuid::createUuid());
+    withoutUrl->setTitle("No URL account");
+    withoutUrl->setUsername("urlless-user");
+
+    auto* secondWithoutUrl = new Entry();
+    secondWithoutUrl->setGroup(root);
+    secondWithoutUrl->setUuid(QUuid::createUuid());
+    secondWithoutUrl->setTitle("Second no URL");
+    secondWithoutUrl->setUsername("second-user");
+
+    // Hidden from browser integration on the entry itself
+    auto* hidden = new Entry();
+    hidden->setGroup(root);
+    hidden->setUuid(QUuid::createUuid());
+    hidden->setTitle("Hidden no URL");
+    hidden->customData()->set(BrowserService::OPTION_HIDE_ENTRY, TRUE_STR);
+
+    // Hidden for the whole group
+    auto* hiddenGroup = new Group();
+    hiddenGroup->setParent(root);
+    hiddenGroup->setName("Hidden group");
+    hiddenGroup->setCustomDataTriState(BrowserService::OPTION_HIDE_ENTRY, Group::Enable);
+    auto* hiddenGroupEntry = new Entry();
+    hiddenGroupEntry->setGroup(hiddenGroup);
+    hiddenGroupEntry->setUuid(QUuid::createUuid());
+    hiddenGroupEntry->setTitle("Hidden group no URL");
+
+    // Restricted to a different browser key
+    auto* restrictedGroup = new Group();
+    restrictedGroup->setParent(root);
+    restrictedGroup->setName("Restricted group");
+    restrictedGroup->customData()->set(BrowserService::OPTION_RESTRICT_KEY, "other-browser");
+    auto* restrictedEntry = new Entry();
+    restrictedEntry->setGroup(restrictedGroup);
+    restrictedEntry->setUuid(QUuid::createUuid());
+    restrictedEntry->setTitle("Restricted no URL");
+
+    // Empty main URL but an additional URL: match that site only
+    auto* additionalOnly = new Entry();
+    additionalOnly->setGroup(root);
+    additionalOnly->setUuid(QUuid::createUuid());
+    additionalOnly->setTitle("Additional URL only");
+    additionalOnly->attributes()->set(EntryAttributes::AdditionalUrlAttribute, "https://keepassxc.org");
+
+    auto* recycled = new Entry();
+    recycled->setGroup(root);
+    recycled->setUuid(QUuid::createUuid());
+    recycled->setTitle("Recycled no URL");
+    db->recycleEntry(recycled);
+
+    const auto titles = [](const QList<Entry*>& found) {
+        QStringList names;
+        for (const auto* entry : found) {
+            names << entry->title();
+        }
+        names.sort();
+        return names;
+    };
+
+    // URL-less entries are candidates for an arbitrary site. Exclusions still apply.
+    const QString arbitrary("https://arbitrary.example/login");
+    auto result = m_browserService->searchEntries(db, arbitrary, arbitrary);
+    const QStringList urlLessTitles{QStringLiteral("No URL account"), QStringLiteral("Second no URL")};
+    QCOMPARE(titles(result), urlLessTitles);
+    QCOMPARE(m_browserService->sortPriority(withoutUrl->getAllUrls(), arbitrary, arbitrary), 0);
+
+    // The same entries are offered alongside a normal URL match, which stays first after sorting.
+    const QString github("https://github.com/login");
+    result = m_browserService->searchEntries(db, github, github);
+    QStringList githubTitles = urlLessTitles;
+    githubTitles << QStringLiteral("GitHub");
+    githubTitles.sort();
+    QCOMPARE(titles(result), githubTitles);
+    auto sorted = m_browserService->sortEntries(result, github, github);
+    QCOMPARE(sorted.first(), withUrl);
+
+    // An additional URL is not treated as "no URL", and a normal URL does not match an unrelated site.
+    const QString keepassxcSite("https://keepassxc.org/");
+    result = m_browserService->searchEntries(db, keepassxcSite, keepassxcSite);
+    QVERIFY(result.contains(additionalOnly));
+    QVERIFY(result.contains(withoutUrl));
+    QVERIFY(!result.contains(withUrl));
+
+    // The restricted entry is visible only to its browser key.
+    result = m_browserService->searchEntries(db, arbitrary, arbitrary, {"other-browser"});
+    QVERIFY(result.contains(restrictedEntry));
+    QVERIFY(result.contains(withoutUrl));
+
+    // Setting off: URL-less entries disappear and URL matching is unchanged.
+    browserSettings()->setOfferEntriesWithoutUrl(false);
+    QCOMPARE(m_browserService->searchEntries(db, arbitrary, arbitrary).length(), 0);
+    result = m_browserService->searchEntries(db, github, github);
+    QCOMPARE(result.length(), 1);
+    QCOMPARE(result[0], withUrl);
+    result = m_browserService->searchEntries(db, keepassxcSite, keepassxcSite);
+    QCOMPARE(result.length(), 1);
+    QCOMPARE(result[0], additionalOnly);
+
+    // Best match only: a real URL match hides URL-less entries. With no URL match they are still returned.
+    browserSettings()->setOfferEntriesWithoutUrl(true);
+    browserSettings()->setBestMatchOnly(true);
+    result = m_browserService->searchEntries(db, github, github);
+    QCOMPARE(result.length(), 1);
+    QCOMPARE(result[0], withUrl);
+    result = m_browserService->searchEntries(db, arbitrary, arbitrary);
+    QCOMPARE(titles(result), urlLessTitles);
+    sorted = m_browserService->sortEntries(result, arbitrary, arbitrary);
+    QCOMPARE(sorted.length(), 2);
+
+    browserSettings()->setOfferEntriesWithoutUrl(previousOffer);
+    browserSettings()->setBestMatchOnly(previousBestMatch);
 }
 
 void TestBrowser::testBrowserHostMessaging()

@@ -227,6 +227,19 @@
         </widget>
        </item>
        <item>
+        <widget class="QCheckBox" name="offerEntriesWithoutUrl">
+         <property name="toolTip">
+          <string>Entries with an empty URL are included for every website. With best-matching enabled, they are offered only when nothing else matches the site.</string>
+         </property>
+         <property name="text">
+          <string extracomment="Entries whose URL field is empty are offered to the browser extension on every website">Offer entries without a URL on all websites</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
         <widget class="QCheckBox" name="allowExpiredCredentials">
          <property name="toolTip">
           <string>Returns expired credentials. String [expired] is added to the title.</string>

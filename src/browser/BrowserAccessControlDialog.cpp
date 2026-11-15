@@ -77,8 +77,21 @@ void BrowserAccessControlDialog::setEntries(const QList<Entry*>& entriesToConfir
     m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::Stretch);
     m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
     m_ui->itemsTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
+    // Pre-select entries that match this site by URL. Entries with no URL are listed
+    // so they can be chosen, but they start unchecked to avoid granting every one of them.
     m_ui->itemsTable->selectAll();
-    m_ui->allowButton->setFocus();
+    for (int i = 0; i < entriesToConfirm.count(); ++i) {
+        if (entriesToConfirm.at(i)->getAllUrls().isEmpty()) {
+            m_ui->itemsTable->setRangeSelected(QTableWidgetSelectionRange(i, 0, i, m_ui->itemsTable->columnCount() - 1),
+                                               false);
+        }
+    }
+    selectionChanged();
+
+    if (m_ui->allowButton->isEnabled()) {
+        m_ui->allowButton->setFocus();
+    }
 }
 
 void BrowserAccessControlDialog::addEntryToList(const Entry* entry, int row)
