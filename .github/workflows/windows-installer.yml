@@ -124,9 +124,27 @@ jobs:
         shell: pwsh
         run: cmake --build build --parallel
 
+      # The runner also has WiX 4. CMake otherwise selects that and rejects the
+      # project's WiX 3 templates. Force WiX 3, which is what the app expects.
       - name: Package MSI and portable ZIP
         shell: pwsh
-        run: cmake --build build --target package
+        run: |
+          $wix3 = "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin"
+          if (Test-Path "$wix3\candle.exe") {
+            $env:PATH = "$wix3;$env:PATH"
+          }
+          Push-Location build
+          cpack -D CPACK_WIX_VERSION=3
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            $log = "_CPack_Packages\win64\WIX\wix.log"
+            if (Test-Path $log) {
+              Write-Host "----- wix.log (tail) -----"
+              Get-Content $log -Tail 200
+            }
+            exit $code
+          }
+          Pop-Location
 
       - name: Show package files
         shell: pwsh
@@ -157,3 +175,4 @@ jobs:
             build/CMakeFiles/CMakeConfigureLog.yaml
             build/CMakeFiles/CMakeOutput.log
             build/CMakeFiles/CMakeError.log
+            build/_CPack_Packages/win64/WIX/wix.log
