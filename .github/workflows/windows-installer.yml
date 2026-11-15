@@ -40,11 +40,12 @@ jobs:
 
       # windows-latest is Windows Server 2025 with Visual Studio 2026.
       # The image also has the MSVC 14.44 toolset, which matches prebuilt Qt MSVC 2022 binaries.
+      # Leave vsversion unset so vswhere -latest selects Visual Studio 2026.
+      # Pin the 14.44 toolset, which the image installs for MSVC 2022 compatibility.
       - name: MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          vsversion: "18.0"
           toolset: "14.44"
 
       - name: Enable long paths
