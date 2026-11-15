@@ -38,24 +38,32 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # windows-latest is Windows Server 2025 with Visual Studio 2026.
+      # The image also has the MSVC 14.44 toolset, which matches prebuilt Qt MSVC 2022 binaries.
       - name: MSVC developer environment
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          vsversion: "2022"
+          vsversion: "18.0"
+          toolset: "14.44"
 
       - name: Enable long paths
         shell: pwsh
         run: git config --global core.longpaths true
 
-      - name: Install vcpkg
+      - name: Prepare vcpkg
         shell: pwsh
         run: |
-          git clone --filter=blob:none https://github.com/microsoft/vcpkg.git $env:VCPKG_ROOT
+          if (-not (Test-Path "$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake")) {
+            throw "vcpkg was not found at $env:VCPKG_ROOT"
+          }
+          if (-not (Test-Path "$env:VCPKG_ROOT\vcpkg.exe")) {
+            & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
+          }
+          # Manifest mode checks out the baseline commit recorded in vcpkg.json.
           git -C $env:VCPKG_ROOT fetch --depth 1 origin $env:VCPKG_BASELINE
-          git -C $env:VCPKG_ROOT checkout --detach $env:VCPKG_BASELINE
-          & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           "$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          & "$env:VCPKG_ROOT\vcpkg.exe" version
 
       - name: Install Qt
         uses: jurplel/install-qt-action@v4
@@ -68,17 +76,22 @@ jobs:
           cache: true
           setup-python: "true"
 
-      - name: Install WiX Toolset 3.14
+      - name: Locate WiX Toolset
         shell: pwsh
         run: |
-          $zip = Join-Path $env:RUNNER_TEMP "wix314-binaries.zip"
-          $dest = "C:\WiX314"
-          Invoke-WebRequest -Uri "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -OutFile $zip
-          Expand-Archive -Path $zip -DestinationPath $dest -Force
-          $candle = Get-ChildItem -Path $dest -Recurse -Filter candle.exe | Select-Object -First 1
-          if (-not $candle) { throw "candle.exe was not found in the WiX archive" }
-          $candle.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
-          Write-Host "WiX tools: $($candle.DirectoryName)"
+          $candle = Get-Command candle.exe -ErrorAction SilentlyContinue
+          if (-not $candle) {
+            $candidates = @(
+              "${env:ProgramFiles(x86)}\WiX Toolset v3.14\bin",
+              "$env:ProgramFiles\WiX Toolset v3.14\bin"
+            )
+            $found = $candidates | Where-Object { Test-Path "$_\candle.exe" } | Select-Object -First 1
+            if (-not $found) { throw "candle.exe was not found. WiX Toolset 3.14 is required to build the MSI." }
+            $found | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+            Write-Host "WiX tools: $found"
+          } else {
+            Write-Host "WiX tools: $($candle.Source)"
+          }
 
       - name: Configure
         shell: pwsh
