@@ -66,16 +66,24 @@ jobs:
           "$env:VCPKG_ROOT" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           & "$env:VCPKG_ROOT\vcpkg.exe" version
 
+      # Prebuilt Qt for the MSVC 2022 ABI. qtsvg and qttools are archives of the
+      # desktop package in aqt 3, not add-on modules.
       - name: Install Qt
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.8.3"
-          host: windows
-          target: desktop
-          arch: win64_msvc2022_64
-          modules: qtsvg qttools
-          cache: true
-          setup-python: "true"
+        shell: pwsh
+        run: |
+          py -3 -m pip install --disable-pip-version-check "aqtinstall==3.3.0"
+          $dest = "C:\Qt"
+          py -3 -m aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 `
+            --outputdir $dest `
+            --autodesktop `
+            --archives qtbase qtsvg qttools qttranslations
+          $qtRoot = Join-Path $dest "6.8.3\msvc2022_64"
+          if (-not (Test-Path "$qtRoot\bin\windeployqt.exe")) {
+            throw "windeployqt.exe was not found under $qtRoot"
+          }
+          "QT_ROOT_DIR=$qtRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "$qtRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          Write-Host "Qt installed at $qtRoot"
 
       - name: Locate WiX Toolset
         shell: pwsh
