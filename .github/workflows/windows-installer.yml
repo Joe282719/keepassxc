@@ -85,6 +85,12 @@ jobs:
           "$qtRoot\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           Write-Host "Qt installed at $qtRoot"
 
+      - name: Install Asciidoctor
+        shell: pwsh
+        run: |
+          gem install asciidoctor --no-document
+          Get-Command asciidoctor | Select-Object -ExpandProperty Source
+
       - name: Locate WiX Toolset
         shell: pwsh
         run: |
@@ -117,7 +123,6 @@ jobs:
             -DX_VCPKG_APPLOCAL_DEPS_INSTALL=ON `
             -DWITH_TESTS=OFF `
             -DWITH_GUI_TESTS=OFF `
-            -DKPXC_FEATURE_DOCS=OFF `
             -DKPXC_FEATURE_BROWSER=ON
 
       - name: Build
